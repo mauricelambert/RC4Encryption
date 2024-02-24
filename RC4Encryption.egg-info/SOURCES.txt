@@ -2,6 +2,7 @@ LICENSE.txt
 MANIFEST.in
 RC4Encryption.py
 README.md
+setup.cfg
 setup.py
 RC4Encryption.egg-info/PKG-INFO
 RC4Encryption.egg-info/SOURCES.txt

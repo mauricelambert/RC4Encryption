@@ -3,7 +3,7 @@
 
 ###################
 #    This package implements RC4 encryption.
-#    Copyright (C) 2021  Maurice Lambert
+#    Copyright (C) 2021, 2024  Maurice Lambert
 
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -22,43 +22,56 @@
 """
 This file implements RC4 cipher.
 
+>>> from urllib.request import urlopen, Request
+>>> from json import dumps, load
 >>> rc4 = RC4Encryption(b'key')
 >>> rc4.make_key()
->>> cipher = rc4.crypt(b'secrets')
->>> cipher_continuation = rc4.crypt(b'secrets')
+>>> cipher = rc4.encrypt(b'secrets')
+>>> cipher.hex() == load(urlopen(Request("https://www.lddgo.net/api/RC4?lang=en", headers={"Content-Type": "application/json;charset=UTF-8"}, data=dumps({"inputContent":"secrets","inputPassword":"key","charset":"UTF-8","inputFormat":"string","outputFormat":"hex","encrypt":True}).encode())))["data"]
+True
+>>> cipher_continuation = rc4.encrypt(b'secrets')
 >>> assert cipher_continuation != cipher
 >>> rc4.reset(b'key')
 >>> rc4.make_key()
->>> rc4.crypt(cipher)
+>>> rc4.encrypt(cipher)
 b'secrets'
->>> rc4.crypt(cipher_continuation)
+>>> rc4.encrypt(cipher_continuation)
 b'secrets'
+>>> 
 
-~# python3 RC4Encryption.py -s secrets -6 key
-eyA34C6Mtw==
-~# python3 RC4Encryption.py -s eyA34C6Mtw== -n base64 key
-secrets
+~# python3 RC4Encryption.py -s mydata mykey -1
+3B1FE10F0025
+~# python3 RC4Encryption.py -s 3B1FE10F0025 -n base16 mykey
+mydata
 ~# python3 RC4Encryption.py -i secrets.file -6 -o cipher.b64 key
 ~# python3 RC4Encryption.py -o decipher.file -n base64 -i cipher.b64 key
+
+1 items passed all tests:
+  12 tests in RC4
+12 tests in 14 items.
+12 passed and 0 failed.
+Test passed.
 """
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 __author__ = "Maurice Lambert"
 __author_email__ = "mauricelambert434@gmail.com"
 __maintainer__ = "Maurice Lambert"
 __maintainer_email__ = "mauricelambert434@gmail.com"
-__description__ = """This package implements RC4 encryption."""
+__description__ = "This package implements RC4 encryption."
 license = "GPL-3.0 License"
 __url__ = "https://github.com/mauricelambert/RC4Encryption"
 
 copyright = """
-RC4Encryption  Copyright (C) 2021  Maurice Lambert
+RC4Encryption  Copyright (C) 2021, 2024  Maurice Lambert
 This program comes with ABSOLUTELY NO WARRANTY.
 This is free software, and you are welcome to redistribute it
 under certain conditions.
 """
 __license__ = license
 __copyright__ = copyright
+
+print(copyright)
 
 __all__ = ["RC4Encryption"]
 
@@ -73,14 +86,20 @@ from base64 import (
     b16decode,
 )
 from argparse import Namespace, ArgumentParser, FileType
-from binascii import a2b_hqx, b2a_hqx
+from locale import getpreferredencoding
+from sys import exit, stdin, stdout
+from warnings import simplefilter
 from contextlib import suppress
 from os import device_encoding
+from typing import Iterable
 from hashlib import sha256
-import argparse
-import warnings
-import locale
-import sys
+
+try:
+    from binascii import a2b_hqx, b2a_hqx
+except ImportError:
+    uu_encoding = False
+else:
+    uu_encoding = True
 
 
 class RC4Encryption:
@@ -101,9 +120,8 @@ class RC4Encryption:
         self.key_length = len(key)
 
     def reset(self, key: bytes) -> None:
-
         """
-        This function reset key and other variables.
+        This function resets key and other variables.
         """
 
         self.table = list(range(256))
@@ -117,9 +135,8 @@ class RC4Encryption:
         self.key_length = len(key)
 
     def make_key(self) -> None:
-
         """
-        This function build the key.
+        This function builds the key.
         """
 
         for i in range(256):
@@ -132,10 +149,9 @@ class RC4Encryption:
             )
         self.index1 = 0
 
-    def crypt(self, secret: bytes) -> bytes:
-
+    def encrypt(self, secret: bytes) -> bytes:
         """
-        This function crypt secret using RC4.
+        This function encrypts secret using RC4.
         """
 
         self.cipher = []
@@ -150,7 +166,9 @@ class RC4Encryption:
             )
             self.cipher.append(
                 car
-                ^ self.table[(self.table[self.index1] + self.table[self.index2]) % 256]
+                ^ self.table[
+                    (self.table[self.index1] + self.table[self.index2]) % 256
+                ]
             )
         self.cipher = bytes(self.cipher)
 
@@ -158,9 +176,8 @@ class RC4Encryption:
 
 
 def parse_args() -> Namespace:
-
     """
-    This function parse command line arguments.
+    This function parses command line arguments.
     """
 
     parser = ArgumentParser(description="This file performs RC4 encryption.")
@@ -171,8 +188,8 @@ def parse_args() -> Namespace:
         "--i-file",
         "-i",
         type=FileType("rb"),
-        default=sys.stdin,
-        help="The file to be encrypted.",
+        default=stdin.buffer,
+        help="The secrets file to be encrypted.",
         nargs="?",
     )
     input_.add_argument(
@@ -183,8 +200,8 @@ def parse_args() -> Namespace:
         "--output-file",
         "--o-file",
         "-o",
-        type=FileType("w", encoding="latin-1"),
-        default=sys.stdout,
+        type=FileType("wb"),
+        default=stdout.buffer,
         help="The output file.",
     )
 
@@ -217,15 +234,21 @@ def parse_args() -> Namespace:
         help="Base16 encoding as output format",
         action="store_true",
     )
-    output_encoding.add_argument(
-        "--uu", "-u", help="UU encoding as output format", action="store_true"
-    )
+    if uu_encoding:
+        output_encoding.add_argument(
+            "--uu",
+            "-u",
+            help="UU encoding as output format",
+            action="store_true",
+        )
     output_encoding.add_argument(
         "--output-encoding",
         "--o-encoding",
         "-e",
         help="Output encoding.",
-        choices={"base85", "base64", "base32", "base16", "uu"},
+        choices={"base85", "base64", "base32", "base16", "uu"}
+        if uu_encoding
+        else {"base85", "base64", "base32", "base16"},
     )
 
     parser.add_argument(
@@ -233,27 +256,28 @@ def parse_args() -> Namespace:
         "--i-encoding",
         "-n",
         help="Input encoding.",
-        choices={"base85", "base64", "base32", "base16", "uu"},
+        choices={"base85", "base64", "base32", "base16", "uu"}
+        if uu_encoding
+        else {"base85", "base64", "base32", "base16"},
     )
 
     parser.add_argument(
         "--sha256",
         help="Use the sha256 of the key as the key.",
-        action=argparse.BooleanOptionalAction,
-        default=True,
+        action="store_true",
+        default=False,
     )
     parser.add_argument("key", help="Encryption key.")
 
     arguments = parser.parse_args()
 
     if arguments.input_file is None:
-        arguments.input_file = sys.stdin
+        arguments.input_file = stdin.buffer
 
     return arguments
 
 
 def output_encoding(data: bytes, arguments: Namespace) -> bytes:
-
     """
     This function returns encoded data.
     """
@@ -266,17 +290,18 @@ def output_encoding(data: bytes, arguments: Namespace) -> bytes:
         encoding = b32encode
     elif arguments.base16 or arguments.output_encoding == "base16":
         encoding = b16encode
-    elif arguments.uu or arguments.output_encoding == "uu":
-        warnings.simplefilter("ignore")
+    elif uu_encoding and (arguments.uu or arguments.output_encoding == "uu"):
+        simplefilter("ignore")
         data = b2a_hqx(data)
-        warnings.simplefilter("default")
+        simplefilter("default")
         return data
+    else:
+        raise ValueError("Invalid encoding algorithm value")
 
     return encoding(data)
 
 
 def input_encoding(data: bytes, encoding: str) -> bytes:
-
     """
     This function returns decoded data.
     """
@@ -289,17 +314,18 @@ def input_encoding(data: bytes, encoding: str) -> bytes:
         decoding = b32decode
     elif encoding == "base16":
         decoding = b16decode
-    elif encoding == "uu":
-        warnings.simplefilter("ignore")
+    elif uu_encoding and encoding == "uu":
+        simplefilter("ignore")
         data = a2b_hqx(data)
-        warnings.simplefilter("default")
+        simplefilter("default")
         return data
+    else:
+        raise ValueError("Invalid encoding algorithm value")
 
     return decoding(data)
 
 
 def get_key(arguments: Namespace) -> bytes:
-
     """
     This function returns the key (256 bits).
     """
@@ -310,28 +336,27 @@ def get_key(arguments: Namespace) -> bytes:
 
 
 def get_data(arguments: Namespace) -> bytes:
-
     """
     This function returns data to encrypt/decrypt.
     """
 
-    if arguments.input_string and arguments.input_encoding:
-        return input_encoding(arguments.input_string, arguments.input_encoding)
-    elif arguments.input_string:
-        return arguments.input_string
-    elif arguments.input_encoding:
-        return input_encoding(arguments.input_file.read(), arguments.input_encoding)
+    if arguments.input_string:
+        data = arguments.input_string
     else:
-        return arguments.input_file.read()
+        data = arguments.input_file.read()
+
+    if arguments.input_encoding:
+        return input_encoding(data, arguments.input_encoding)
+
+    return data
 
 
-def get_encodings():
-
+def get_encodings() -> Iterable[str]:
     """
     This function returns the probable encodings.
     """
 
-    encoding = locale.getpreferredencoding()
+    encoding = getpreferredencoding()
     if encoding is not None:
         yield encoding
 
@@ -345,9 +370,8 @@ def get_encodings():
 
 
 def decode_output(data: bytes) -> str:
-
     """
-    This function decode outputs (try somes encoding).
+    This function decodes data (try probable encodings).
     """
 
     output = None
@@ -357,8 +381,7 @@ def decode_output(data: bytes) -> str:
             return output
 
 
-def main() -> None:
-
+def main() -> int:
     """
     This function executes this file from the command line.
     """
@@ -366,7 +389,7 @@ def main() -> None:
     arguments = parse_args()
 
     if arguments.input_string:
-        arguments.input_string = arguments.input_string.encode("utf-8")
+        arguments.input_string = arguments.input_string.encode()
 
     rc4 = RC4Encryption(get_key(arguments))
     rc4.make_key()
@@ -377,21 +400,20 @@ def main() -> None:
             arguments.base64,
             arguments.base32,
             arguments.base16,
-            arguments.uu,
+            arguments.uu if uu_encoding else None,
             arguments.output_encoding,
         ]
     )
 
-    rc4.crypt(get_data(arguments))
+    rc4.encrypt(get_data(arguments))
 
     if format_output:
-        arguments.output_file.write(
-            decode_output(output_encoding(rc4.cipher, arguments))
-        )
+        data = output_encoding(rc4.cipher, arguments)
     else:
-        arguments.output_file.write(decode_output(rc4.cipher))
+        data = rc4.cipher
+
+    arguments.output_file.write(data)
 
 
 if __name__ == "__main__":
-    main()
-    sys.exit(0)
+    exit(main())
