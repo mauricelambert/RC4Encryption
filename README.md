@@ -79,14 +79,14 @@ from RC4Encryption import RC4Encryption
 
 rc4 = RC4Encryption(b'key')
 rc4.make_key()
-cipher = rc4.crypt(b'secrets')
-cipher_continuation = rc4.crypt(b'secrets')
+cipher = rc4.encrypt(b'secrets')
+cipher_continuation = rc4.encrypt(b'secrets')
 
 
 rc4.reset(b'key')
 rc4.make_key()
-decipher = rc4.crypt(cipher)
-decipher_continuation = rc4.crypt(cipher_continuation)
+decipher = rc4.encrypt(cipher)
+decipher_continuation = rc4.encrypt(cipher_continuation)
 ```
 
 ## Links
