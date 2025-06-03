@@ -70,9 +70,6 @@ under certain conditions.
 """
 __license__ = license
 __copyright__ = copyright
-
-print(copyright)
-
 __all__ = ["RC4Encryption"]
 
 from base64 import (
@@ -385,6 +382,8 @@ def main() -> int:
     """
     This function executes this file from the command line.
     """
+
+    print(copyright)
 
     arguments = parse_args()
 
